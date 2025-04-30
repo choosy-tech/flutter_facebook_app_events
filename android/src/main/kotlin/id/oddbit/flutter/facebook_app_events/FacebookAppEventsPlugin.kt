@@ -2,12 +2,15 @@ package id.oddbit.flutter.facebook_app_events
 
 import androidx.annotation.NonNull
 
+import android.app.Application
 import android.os.Bundle
 import android.util.Log
 import com.facebook.FacebookSdk
 import com.facebook.appevents.AppEventsLogger
 import com.facebook.GraphRequest
 import com.facebook.GraphResponse
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -16,7 +19,7 @@ import io.flutter.plugin.common.MethodChannel.Result
 import java.util.Currency
 
 /** FacebookAppEventsPlugin */
-class FacebookAppEventsPlugin: FlutterPlugin, MethodCallHandler {
+class FacebookAppEventsPlugin: ActivityAware, FlutterPlugin, MethodCallHandler {
   /// The MethodChannel that will the communication between Flutter and native Android
   ///
   /// This local reference serves to register the plugin with the Flutter Engine and unregister it
@@ -24,6 +27,7 @@ class FacebookAppEventsPlugin: FlutterPlugin, MethodCallHandler {
   private lateinit var channel : MethodChannel
   private lateinit var appEventsLogger: AppEventsLogger
   private lateinit var anonymousId: String
+  private var application: Application? = null
 
   private val logTag = "FacebookAppEvents"
 
@@ -38,8 +42,25 @@ class FacebookAppEventsPlugin: FlutterPlugin, MethodCallHandler {
     channel.setMethodCallHandler(null)
   }
 
+  override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+    application = binding.activity.application;
+  }
+
+  override fun onDetachedFromActivityForConfigChanges() {
+    application = null
+  }
+
+  override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+    application = binding.activity.application;
+  }
+
+  override fun onDetachedFromActivity() {
+    application = null
+  }
+
   override fun onMethodCall(call: MethodCall, result: Result) {
     when (call.method) {
+      "activateApp" -> handleActivateApp(call, result)
       "clearUserData" -> handleClearUserData(call, result)
       "setUserData" -> handleSetUserData(call, result)
       "clearUserID" -> handleClearUserId(call, result)
@@ -56,6 +77,21 @@ class FacebookAppEventsPlugin: FlutterPlugin, MethodCallHandler {
 
       else -> result.notImplemented()
     }
+  }
+
+  private fun handleActivateApp(call: MethodCall, result: Result) {
+    val application = this.application
+
+    if (application == null) {
+      result.error("missing_application", "could not activate app: Android application is missing", null)
+      return
+    }
+
+    val applicationId = call.argument("applicationId") as? String
+    
+    AppEventsLogger.activateApp(application, applicationId)
+
+    result.success(null)
   }
 
   private fun handleClearUserData(call: MethodCall, result: Result) {
